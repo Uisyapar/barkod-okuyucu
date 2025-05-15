@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barkod Okuyucu & Excel Arama</title>
+</head>
+<body>
+    <h2>Excel Yükle ve Barkod Oku</h2>
+
+    <input type="file" id="excelFile" accept=".xlsx, .xls" />
+    <button onclick="startScanner()">Barkod Okuyucu Aç</button>
+    <div id="scanner-container"></div>
+    
+    <h3>Okunan Barkod:</h3>
+    <p id="scannedBarcode">Henüz tarama yapılmadı.</p>
+    
+    <h3>Barkoda Karşılık Gelen Veri:</h3>
+    <p id="result"></p>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+
+    <script>
+        let barcodeData = {};
+
+        document.getElementById('excelFile').addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+                jsonData.forEach(row => {
+                    if (row[0] && row[1]) {
+                        barcodeData[row[0]] = row[1];
+                    }
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function startScanner() {
+            Quagga.init({
+                inputStream: {
+                    name: "Live",
+                    type: "LiveStream",
+                    target: document.querySelector("#scanner-container"),
+                    constraints: {
+                        facingMode: "environment" // Arka kamera kullanılır
+                    }
+                },
+                decoder: {
+                    readers: ["ean_reader", "code_128_reader", "upc_reader"]
+                }
+            }, function(err) {
+                if (err) {
+                    console.error(err);
+                    return;
+                }
+                Quagga.start();
+            });
+
+            Quagga.onDetected(function(result) {
+                let barcode = result.codeResult.code;
+                
+                // Okunan barkod numarasını sayfada göster
+                document.getElementById("scannedBarcode").innerText = barcode;
+
+                // Excel'deki eşleşen veriyi göster
+                let productInfo = barcodeData[barcode] || "Barkod bulunamadı.";
+                document.getElementById("result").innerText = productInfo;
+                
+                Quagga.stop(); // Barkod okunduktan sonra kamerayı kapat
+            });
+        }
+    </script>
+</body>
+</html>
